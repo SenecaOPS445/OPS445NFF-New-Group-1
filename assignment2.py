@@ -61,21 +61,6 @@ def create_hash(target, destination):
     print("Hash file created at", hash)  
     
 
-def verify_backup(target, hash):
-    if not os.access(target,os.F_OK):
-        print("Error: Target file does not exist")
-        return
-    
-    if not os.access(target,os.R_OK):
-        print("Error: Cannot verify target backup")
-        return
-
-    if hash == create_hash(target):
-        print("Backup is verified")
-    else:
-        print("Backup is not verified")
-    return
-
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
     if not os.access(target,os.F_OK):
