@@ -5,7 +5,7 @@ import sys
 import os
 import argparse
 import subprocess
-
+import hashlib
 def create_backup(target, destination, compression):# hash, note, directory_name):
     if not os.access(target,os.F_OK):
         print("Error: Target directory does not exist")
@@ -18,7 +18,6 @@ def create_backup(target, destination, compression):# hash, note, directory_name
     if not os.access(destination,os.W_OK):
         print("Error: Cannot back up to specified directory")
         return
-
     
     
     dir_name = target.split("/")[len(target.split("/"))-1]
@@ -33,27 +32,49 @@ def create_backup(target, destination, compression):# hash, note, directory_name
         dir_name = str(copy_num) + "-" + dir_name
     
     destination = destination + str("/") + dir_name  + str("/")
-
+    
     
     create_backup_dir = subprocess.run(["mkdir", destination])
 
-
-
-
-    final_dest = destination + target.split("/")[len(target.split("/"))-1]
+    create_hash(target, destination)
     
+    final_dest = destination + target.split("/")[len(target.split("/"))-1]
     
     if compression == 0:
         final_dest = final_dest + str(".tar")
     else:
         final_dest = final_dest + str(".tar.gz")
 
-    
     backup_process = subprocess.run(["tar", "-czvf", final_dest, target], env={"GZIP":"-"+str(compression), **dict(subprocess.os.environ)})
-
     print(backup_process.stdout)
     return
 
+
+def create_hash(target, destination):
+    hash = hashlib.sha256()
+    with open(target, "rb") as file: # rb = read binary
+        while hash.update(file.read(4096)):
+            pass 
+    hash_file_path = os.path.join(destination, os.path.basename(target) + ".sha256")
+    with open(hash_file_path, "w") as hash_file:
+        hash_file.write(hash.hexdigest())
+    print("Hash file created at", hash)  
+    
+
+def verify_backup(target, hash):
+    if not os.access(target,os.F_OK):
+        print("Error: Target file does not exist")
+        return
+    
+    if not os.access(target,os.R_OK):
+        print("Error: Cannot verify target backup")
+        return
+
+    if hash == create_hash(target):
+        print("Backup is verified")
+    else:
+        print("Backup is not verified")
+    return
 
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
@@ -102,6 +123,7 @@ def main():
     else:
         ("specify a valid action")
         return
-    
+
+        
 if __name__ == "__main__":
     main()
