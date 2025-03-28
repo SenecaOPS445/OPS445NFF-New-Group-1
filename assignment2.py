@@ -18,42 +18,64 @@ def create_backup(target, destination, compression):# hash, note, directory_name
     if not os.access(destination,os.W_OK):
         print("Error: Cannot back up to specified directory")
         return
-
     
-    
-    dir_name = target.split("/")[len(target.split("/"))-1]
+    if target[-1:] == "/": #Strips trailing / if passed in as part of target
+        target = target[:-1]
 
-    #working_directory = target - dir_name #need to remove the target from the full directory path to get a cwd variable for subprocess.os
+    working_dir = cwd(target)
 
-    copy_num = 1
+    target_obj = strip_leading_path(target)
 
-    if os.path.exists(str(destination)+str(dir_name)): #loop for checking if a backup folder already exists
-        while os.path.exists(str(destination) + str(copy_num) + "-" + str(dir_name)):
-            copy_num += 1
-        dir_name = str(copy_num) + "-" + dir_name
-    
-    destination = destination + str("/") + dir_name  + str("/")
+    destination = create_backup_directory(target,destination)
 
-    
-    create_backup_dir = subprocess.run(["mkdir", destination])
+    create_backup_dir = subprocess.run(["mkdir", destination]) #makes the directory
 
+    final_dest = destination + target_obj + tar_or_gz(compression)
 
-
-
-    final_dest = destination + target.split("/")[len(target.split("/"))-1]
-    
-    
-    if compression == 0:
-        final_dest = final_dest + str(".tar")
-    else:
-        final_dest = final_dest + str(".tar.gz")
-
-    
-    backup_process = subprocess.run(["tar", "-czvf", final_dest, target], env={"GZIP":"-"+str(compression), **dict(subprocess.os.environ)})
+    backup_process = subprocess.run(["tar", "-czvf", final_dest, target_obj], env={"GZIP":"-"+str(compression), **dict(subprocess.os.environ)}, cwd=working_dir)
 
     print(backup_process.stdout)
+    
     return
 
+def create_backup_directory(targ,dest):
+    "Checkes destination directory for folders of the same name that already exsist, iterates through them to find a valid backup directory name"    
+    dir_name = strip_leading_path(targ) 
+
+    copy_num = 0
+
+    while os.path.exists(str(dest) + "/" + str(copy_num) + "-" + str(dir_name)): #loop for checking if a backup folder of the same already exists
+        copy_num += 1
+
+    dir_name = str(copy_num) + "-" + dir_name # creates the folder name with the format #-target
+    
+    dest = dest + str("/") + dir_name  + str("/") #assemble full file path for the mkdir command
+    
+    return dest #return the final directory path to be used by the tar command
+
+def strip_leading_path(path):
+    "Returns string following final / in the path"
+    return path.split("/")[len(path.split("/"))-1]
+
+def cwd(targ):
+    "Create the cwd property for the TAR process so it does not archive the entire filepath."
+    while targ[-1:] != "/": #strips characters off the end that aren't a / leaving the path to the parent directory of the target
+        targ = targ[:-1]
+
+    return targ
+
+def tar_or_gz(zip):
+    "properly sets file extension as .tar or .tar.gz depending on compression level"
+    if zip == 0:
+        return ".tar"
+    else:
+        return ".tar.gz"
+
+def file_or_dir(targ):
+    if os.path.isfile(targ):
+        return "P"
+    if os.path.isdir(targ):
+        return "D"
 
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
@@ -69,10 +91,28 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         print("Error: Cannot restore to destination directory")
         return
 
+    if os.access(destination + strip_leading_path(strip_tar_gz(target)), os.F_OK):
+        print("The file/dir you are trying to restore already exists in the destination directory.")
+        tmp_input = input("Would you like to overwrite the existing file, or create a new file? [overwrite/new]:")
+        tmp_input = tmp_input.lower()
+        while tmp_input not "overwrite" or tmp_input not "new":
+            tmp_input = input("Invalid input. Please enter either \"overwrite\" or \"new\", or press ctrl+c to exit script:")
+            tmp_input = tmp_input.lower()
 
-    backup_process = subprocess.run(["tar", "-xzvf",destination, target])
-    print(backup_process.stdout)
+        if tmp_input == "overwrite":
+            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=destination)
+            print(backup_process.stdout)
+        
+        if tmp_input == "new":
+            
 
+
+    def strip_tar_gz(targ):
+        if targ[-3:] == ".gz":
+            targ = targ [:-3]
+        if targ[:-4] == ".tar":
+            targ = targ [:-4]
+        return targ
 
 def main():
     parser = argparse.ArgumentParser(description="A utility to create or restore backups locally")
