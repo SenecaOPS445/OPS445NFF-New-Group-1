@@ -79,6 +79,13 @@ def file_or_dir(targ):
 
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
+
+    restore_name = strip_leading_path(target) 
+
+    restore_name = strip_tar_gz(restore_name) # strips occurences of .tar.gz
+
+    restore_dir = destination + restore_name + "_restored" # path where restore of backup will be placed
+
     if not os.access(target,os.F_OK):
         print("Error: Target file does not exist")
         return
@@ -91,39 +98,42 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         print("Error: Cannot restore to destination directory")
         return
 
-    if os.access(destination + strip_leading_path(strip_tar_gz(target)), os.F_OK):
+    if os.access(restore_dir, os.F_OK):
         print("The file/dir you are trying to restore already exists in the destination directory.")
-        tmp_input = input("Would you like to overwrite the existing file, or create a new file? [overwrite/new]:")
+        tmp_input = input("Would you like to overwrite the existing file, create a new file, or exit? [overwrite/new/exit]:")
         tmp_input = tmp_input.lower()
-        while tmp_input != "overwrite" and tmp_input != "new":
-            tmp_input = input("Invalid input. Please enter either \"overwrite\" or \"new\", or press ctrl+c to exit script:")
+        while tmp_input != "overwrite" and tmp_input != "new" and tmp_input != "exit":
+            tmp_input = input("Invalid input. Please enter either \"overwrite\", \"new\", or \"exit\".")
             tmp_input = tmp_input.lower()
 
         if tmp_input == "overwrite":
-            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=destination)
+            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=restore_dir)
             print(backup_process.stdout)
         
         if tmp_input == "new":
-            return()
+            restore_name = input("Enter a new directory name: ")
+            x = restore_name
+            while restore_name == x:
+                restore_name = input("Directory name can not be the same as original: ")
+            restore_dir = destination + restore_name + "_restored" # path where restore of backup will be placed
+            subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
+            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+            return
         
-    restore_name = strip_leading_path(target) 
-
-    restore_name = restore_name.replace('.tar.gz', '') # strips occurences of .tar.gz
-
-    restore_name = restore_name.replace('.tar', '') # strips occurences of .tar 
-
-    restore_dir = destination + restore_name + "_restored" # path where restore of backup will be placed
+        if tmp_input == "exit":
+            print("Exiting...")
+            return
     
     subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
 
-    backup_process = subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+    subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
     
     print(f"Restored backup to {restore_dir}")
-
+    print(destination + restore_name)
 def strip_tar_gz(targ):
         if targ[-3:] == ".gz":
             targ = targ [:-3]
-        if targ[:-4] == ".tar":
+        if targ[-4:] == ".tar":
             targ = targ [:-4]
         return targ
 
