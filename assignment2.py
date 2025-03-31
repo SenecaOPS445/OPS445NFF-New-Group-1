@@ -95,7 +95,7 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         print("The file/dir you are trying to restore already exists in the destination directory.")
         tmp_input = input("Would you like to overwrite the existing file, or create a new file? [overwrite/new]:")
         tmp_input = tmp_input.lower()
-        while tmp_input not "overwrite" or tmp_input not "new":
+        while tmp_input != "overwrite" or tmp_input != "new":
             tmp_input = input("Invalid input. Please enter either \"overwrite\" or \"new\", or press ctrl+c to exit script:")
             tmp_input = tmp_input.lower()
 
@@ -104,8 +104,7 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
             print(backup_process.stdout)
         
         if tmp_input == "new":
-            
-
+            return()
 
     def strip_tar_gz(targ):
         if targ[-3:] == ".gz":
