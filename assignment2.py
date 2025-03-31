@@ -95,7 +95,7 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         print("The file/dir you are trying to restore already exists in the destination directory.")
         tmp_input = input("Would you like to overwrite the existing file, or create a new file? [overwrite/new]:")
         tmp_input = tmp_input.lower()
-        while tmp_input != "overwrite" or tmp_input != "new":
+        while tmp_input != "overwrite" and tmp_input != "new":
             tmp_input = input("Invalid input. Please enter either \"overwrite\" or \"new\", or press ctrl+c to exit script:")
             tmp_input = tmp_input.lower()
 
@@ -105,8 +105,22 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         
         if tmp_input == "new":
             return()
+        
+    restore_name = strip_leading_path(target) 
 
-    def strip_tar_gz(targ):
+    restore_name = restore_name.replace('.tar.gz', '') # strips occurences of .tar.gz
+
+    restore_name = restore_name.replace('.tar', '') # strips occurences of .tar 
+
+    restore_dir = destination + restore_name + "_restored" # path where restore of backup will be placed
+    
+    subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
+
+    backup_process = subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+    
+    print(f"Restored backup to {restore_dir}")
+
+def strip_tar_gz(targ):
         if targ[-3:] == ".gz":
             targ = targ [:-3]
         if targ[:-4] == ".tar":
