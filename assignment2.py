@@ -39,6 +39,7 @@ def create_backup(target, destination, compression):# hash, note, directory_name
     
     return final_dest
 
+<<<<<<< HEAD
 def create_backup_directory(targ,dest):
     "Checkes destination directory for folders of the same name that already exsist, iterates through them to find a valid backup directory name"    
     dir_name = strip_leading_path(targ) 
@@ -109,6 +110,8 @@ def create_hash(backup_file):
 
     print(f"Hash created at {hash_file}")
 
+=======
+>>>>>>> 0a459998cd22b21bc8b3f70146d76025e59c6c3e
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
 
