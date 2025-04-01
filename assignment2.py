@@ -39,7 +39,6 @@ def create_backup(target, destination, compression):# hash, note, directory_name
     
     return final_dest
 
-<<<<<<< HEAD
 def create_backup_directory(targ,dest):
     "Checkes destination directory for folders of the same name that already exsist, iterates through them to find a valid backup directory name"    
     dir_name = strip_leading_path(targ) 
@@ -110,8 +109,31 @@ def create_hash(backup_file):
 
     print(f"Hash created at {hash_file}")
 
-=======
->>>>>>> 0a459998cd22b21bc8b3f70146d76025e59c6c3e
+def verify_hash(backup_file):
+    hash_file = backup_file + ".hash"
+
+    if not os.path.isfile(backup_file):
+        print("Error: Backup file does not exist.")
+        return
+
+    if not os.path.isfile(hash_file):
+        print("Error: Hash file does not exist.")
+        return
+
+    # Read stored hash
+    with open(hash_file, "r") as f:
+        stored_hash = f.read().strip()
+
+    # Compute current hash
+    with open(backup_file, "rb") as f:
+        file_data = f.read()
+        current_hash = hashlib.sha256(file_data).hexdigest()
+
+    # Compare hashes
+    if current_hash == stored_hash:
+        print(" Hash matches. Backup is valid.")
+    else:
+        print(" Hash mismatch. Backup may be corrupted.")
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
 
@@ -199,7 +221,8 @@ def main():
         restore_backup(args.target, args.destination)
     elif args.hash:
         create_hash(args.target)
-        
+    elif args.verify:
+        verify_hash(args.target)   
     else:
         ("specify a valid action")
         return
