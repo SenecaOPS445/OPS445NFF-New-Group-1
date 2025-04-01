@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 #seneca id: jshopkins
 
@@ -19,65 +20,104 @@ def create_backup(target, destination, compression):# hash, note, directory_name
         print("Error: Cannot back up to specified directory")
         return
     
-    
-    dir_name = target.split("/")[len(target.split("/"))-1]
+    if target[-1:] == "/": #Strips trailing / if passed in as part of target
+        target = target[:-1]
 
-    #working_directory = target - dir_name #need to remove the target from the full directory path to get a cwd variable for subprocess.os
+    working_dir = cwd(target)
 
-    copy_num = 1
+    target_obj = strip_leading_path(target)
 
-    if os.path.exists(str(destination)+str(dir_name)): #loop for checking if a backup folder already exists
-        while os.path.exists(str(destination) + str(copy_num) + "-" + str(dir_name)):
-            copy_num += 1
-        dir_name = str(copy_num) + "-" + dir_name
-    
-    destination = destination + str("/") + dir_name  + str("/")
-    
-    
-    create_backup_dir = subprocess.run(["mkdir", destination])
+    destination = create_backup_directory(target,destination)
 
-    create_hash(target, destination)
-    
-    final_dest = destination + target.split("/")[len(target.split("/"))-1]
-    
-    if compression == 0:
-        final_dest = final_dest + str(".tar")
-    else:
-        final_dest = final_dest + str(".tar.gz")
+    create_backup_dir = subprocess.run(["mkdir", destination]) #makes the directory
 
-    backup_process = subprocess.run(["tar", "-czvf", final_dest, target], env={"GZIP":"-"+str(compression), **dict(subprocess.os.environ)})
+    final_dest = destination + target_obj + tar_or_gz(compression)
+
+    backup_process = subprocess.run(["tar", "-czvf", final_dest, target_obj], env={"GZIP":"-"+str(compression), **dict(subprocess.os.environ)}, cwd=working_dir)
+
     print(backup_process.stdout)
-    return
-
-
-def create_hash(target, destination):
-    hash = hashlib.sha256()
-    with open(target, "rb") as file: # rb = read binary
-        while hash.update(file.read(4096)):
-            pass 
-    hash_file_path = os.path.join(destination, os.path.basename(target) + ".sha256")
-    with open(hash_file_path, "w") as hash_file:
-        hash_file.write(hash.hexdigest())
-    print("Hash file created at", hash)  
     
+    return final_dest
 
-def verify_backup(target, hash):
-    if not os.access(target,os.F_OK):
-        print("Error: Target file does not exist")
-        return
+def create_backup_directory(targ,dest):
+    "Checkes destination directory for folders of the same name that already exsist, iterates through them to find a valid backup directory name"    
+    dir_name = strip_leading_path(targ) 
+
+    copy_num = 0
+
+    while os.path.exists(str(dest) + "/" + str(copy_num) + "-" + str(dir_name)): #loop for checking if a backup folder of the same already exists
+        copy_num += 1
+
+    dir_name = str(copy_num) + "-" + dir_name # creates the folder name with the format #-target
     
-    if not os.access(target,os.R_OK):
-        print("Error: Cannot verify target backup")
-        return
+    dest = dest + str("/") + dir_name  + str("/") #assemble full file path for the mkdir command
+    
+    return dest #return the final directory path to be used by the tar command
 
-    if hash == create_hash(target):
-        print("Backup is verified")
+def strip_leading_path(path):
+    "Returns string following final / in the path"
+    return path.split("/")[len(path.split("/"))-1]
+
+def cwd(targ):
+    "Create the cwd property for the TAR process so it does not archive the entire filepath."
+    while targ[-1:] != "/": #strips characters off the end that aren't a / leaving the path to the parent directory of the target
+        targ = targ[:-1]
+
+    return targ
+
+def tar_or_gz(zip):
+    "properly sets file extension as .tar or .tar.gz depending on compression level"
+    if zip == 0:
+        return ".tar"
     else:
-        print("Backup is not verified")
-    return
+        return ".tar.gz"
+
+def file_or_dir(targ):
+    if os.path.isfile(targ):
+        return "P"
+    if os.path.isdir(targ):
+        return "D"
+    
+
+def create_hash(backup_file):
+    if not os.path.isfile(backup_file):
+        print("Error: Target backup file does not exist")
+        return
+
+    if not os.access(backup_file, os.R_OK):
+        print("Error: Cannot read the backup file")
+        return
+
+    hash_file = backup_file + ".hash"
+
+    if os.path.exists(hash_file):
+        response = input("Hash file already exists. Overwrite? [y/n]: ").lower()
+        while response not in ["y", "n"]:
+            response = input("Invalid input. Please enter 'y' or 'n': ").lower()
+        if response == "n":
+            print("Exiting without overwriting hash file.")
+            return
+        os.remove(hash_file)
+
+    # Read entire file and hash
+    with open(backup_file, "rb") as f:
+        file_data = f.read()
+        sha256 = hashlib.sha256(file_data).hexdigest()
+
+    with open(hash_file, "w") as f:
+        f.write(sha256)
+
+    print(f"Hash created at {hash_file}")
 
 
 def restore_backup(target, destination):#, compression, hash, note, directory_name):
+
+    restore_name = strip_leading_path(target) 
+
+    restore_name = strip_tar_gz(restore_name) # strips occurences of .tar.gz
+
+    restore_dir = destination + restore_name + "_restored" # path where restore of backup will be placed
+
     if not os.access(target,os.F_OK):
         print("Error: Target file does not exist")
         return
@@ -90,10 +130,44 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         print("Error: Cannot restore to destination directory")
         return
 
+    if os.access(restore_dir, os.F_OK):
+        print("The file/dir you are trying to restore already exists in the destination directory.")
+        tmp_input = input("Would you like to overwrite the existing file, create a new file, or exit? [overwrite/new/exit]:")
+        tmp_input = tmp_input.lower()
+        while tmp_input != "overwrite" and tmp_input != "new" and tmp_input != "exit":
+            tmp_input = input("Invalid input. Please enter either \"overwrite\", \"new\", or \"exit\".")
+            tmp_input = tmp_input.lower()
 
-    backup_process = subprocess.run(["tar", "-xzvf",destination, target])
-    print(backup_process.stdout)
+        if tmp_input == "overwrite":
+            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=restore_dir)
+            print(backup_process.stdout)
+        
+        if tmp_input == "new":
+            restore_name = input("Enter a new directory name: ")
+            x = restore_name
+            while restore_name == x:
+                restore_name = input("Directory name can not be the same as original: ")
+            restore_dir = destination + restore_name + "_restored" # path where restore of backup will be placed
+            subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
+            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+            return
+        
+        if tmp_input == "exit":
+            print("Exiting...")
+            return
+    
+    subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
 
+    subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+    
+    print(f"Restored backup to {restore_dir}")
+    print(destination + restore_name)
+def strip_tar_gz(targ):
+        if targ[-3:] == ".gz":
+            targ = targ [:-3]
+        if targ[-4:] == ".tar":
+            targ = targ [:-4]
+        return targ
 
 def main():
     parser = argparse.ArgumentParser(description="A utility to create or restore backups locally")
@@ -115,15 +189,18 @@ def main():
         return
     
     if args.backup:
-        create_backup(args.target, args.destination, args.zip)
-
-    if args.restore:
+        backup_path=create_backup(args.target, args.destination, args.zip)
+        if args.hash:
+            create_hash(backup_path)
+    elif args.restore:
         restore_backup(args.target, args.destination)
-
+    elif args.hash:
+        create_hash(args.target)
+        
     else:
         ("specify a valid action")
         return
-
-        
+    
 if __name__ == "__main__":
     main()
+
