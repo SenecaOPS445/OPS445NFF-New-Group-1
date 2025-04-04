@@ -137,6 +137,84 @@ def strip_tar_gz(targ):
             targ = targ [:-4]
         return targ
 
+
+def interactive_menu():
+
+     '''
+    Responsible: Shikshya Sharma
+    Function: Create an interavtive menu to guide the user through the backup process if agruments are not provided
+    '''
+
+    while True:
+        print("\nBackup Utility Menu")
+        print("-------------------")
+        print("1. Backup")
+        print("2. Restore")
+        print("3. Verify")
+        print("4. Exit")
+        
+        choice = input("Enter your choice (1–4): ").strip()
+
+        if choice == "1":
+            print("\n--- Backup Setup ---")
+            
+            target = input("Enter the path to file/directory that you to back up: ").strip()
+
+            while os.path.exists(target) == False:
+                target = input("Invalid path. Please enter a valid file or directory path: ").strip()
+
+            dest = input("Destination directory for the backup: ").strip()
+            while os.path.isdir(dest) == False:
+                dest = input("Invalid directory. Please enter an existing directory: ").strip()
+
+            zip_input = input("Compression level (0–9), or 'n' for no compression [default = 6]: ").strip().lower()
+            if zip_input == "n":
+                zip_level = 0
+            elif zip_input.isdigit() and 0 <= int(zip_input) <= 9:
+                zip_level = int(zip_input)
+            else:
+                print("Invalid input. Compressing to level 5")
+                zip_level = 5
+
+            note = input("Enter a note (optional): ").strip()
+            hash_flag = input("Generate a hash file? (y/n): ").strip().lower() == "y"
+
+            print("Creating backup...\n")
+            create_backup(target, dest, zip_level, hash_flag, note)
+
+        elif choice == "2":
+            print("\n--- Restore Setup ---")
+
+            target = input("Path to the .tar or .tar.gz file: ").strip()
+            while os.path.isfile(target) == False:
+                target = input("Invalid file path. Please enter a valid backup file: ").strip()
+
+            dest = input("Destination directory for restore: ").strip()
+            while os.path.isdir(dest) == False:
+                dest = input("Invalid directory. Please enter an existing directory: ").strip()
+
+            print("Restoring backup...\n")
+            restore_backup(target, dest)
+
+        elif choice == "3":
+            print("\n--- Verify Setup ---")
+
+            hash_file = input("Path to the .sha256 file: ").strip()
+            while (os.path.isfile(hash_file) == False or hash_file.endswith(".sha256")) == False:
+                hash_file = input("Invalid file. Please enter a valid .sha256 hash file: ").strip()
+
+            print("Verifying integrity...\n")
+            verify_hash(hash_file)
+
+        elif choice == "4":
+            print("Exiting Backup Utility....\n")
+            break
+
+        else:
+            print("Invalid choice. Please enter a number between 1 and 4.")
+
+        input("\nPress Enter to return to the main menu...")
+
 def main():
     parser = argparse.ArgumentParser(description="A utility to create or restore backups locally")
     parser.add_argument("target", nargs="?", help="specify the /path/to/target")
@@ -153,7 +231,7 @@ def main():
     args = parser.parse_args()
 
     if not args.target:
-        print("Create an interactive menu")
+        print("Create an iteractive menu")
         return
     
     if args.backup:
