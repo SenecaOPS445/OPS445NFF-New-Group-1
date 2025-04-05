@@ -12,6 +12,12 @@ def create_backup(target, destination, compression, hash, note):
     Function: Creates backup of target file or directory using the tar and gzip.
     Also handles extra steps of creating hash, adding note, and naming the directory as directed by user input
     """
+
+    target = os.path.abspath(target)
+
+    if destination is None:
+        destination = os.path.dirname(target)
+
     if not os.access(target,os.F_OK):
         print("Error: Target directory does not exist")
         return
@@ -105,17 +111,23 @@ def add_note(note, dest):
         note_file.write(note)
     print (f"Note added to {note_path}")
 
-def restore_backup(target, destination):#, compression, hash, note, directory_name):
+def restore_backup(target, destination=None):#, compression, hash, note, directory_name):
     """
     Responsible: Michael Popov, Jonathan Hopkins
     Function: Restores a target .tar.gz file to destination
     """ 
 
+    if destination is None:
+        destination = os.path.dirname(target)
+
+    if "/" not in target[0]:
+        target = os.path.abspath(target)
+
     restore_name = strip_leading_path(target) 
 
     restore_name = strip_tar_gz(restore_name) # strips occurences of .tar.gz
 
-    restore_dir = f"{destination}{restore_name}_restored" # path where restore of backup will be placed
+    restore_dir = f"{restore_name}_restored" # path where restore of backup will be placed
 
     if not os.access(target,os.F_OK):
         print("Error: Target file does not exist")
@@ -145,17 +157,16 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         if tmp_input in ["n","new"]:
             x = restore_name
             restore_name = input("Enter a new directory name: ")
-            
 
             while restore_name == x:
                 restore_name = input("Directory name can not be the same as original: ")
 
-            restore_dir = f"{destination}{restore_name}_restored" # path where restore of backup will be placed
-            subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
-            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+            subprocess.run(["mkdir", "-p", restore_name]) # Create directory for restoration
+            subprocess.run(["tar", "-xzvf", target, "-C", restore_name]) # Extract backup to directory
+            print(f"Restored backup to {restore_name}")            
             return
         
-        if tmp_input == "exit":
+        if tmp_input in ["x", "exit"]:
             print("Exiting...")
             exit()
     
@@ -173,21 +184,20 @@ def restore_backup(target, destination):#, compression, hash, note, directory_na
         if verify_input in ["y","yes"]:
             if verify_hash(f"{cwd(target)}{hash_list[0]}") == False:
                 cont = input("File integrity is compromised. Would you like to continue with the restore regardless [y/n]:")
-                cont = verify_input.lower()
+                cont = cont.lower()
             
                 while cont not in ["y","n","no","yes"]:
                     cont = input("Please enter valid input [y/n]:")
-                    cont = verify_input.lower()
+                    cont = cont.lower()
                 
                 if cont in ["n","no"]:
+                    print("Exiting...")
                     exit()
-                
-
             
     subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
 
     subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
-    
+
     print(f"Restored backup to {restore_dir}")
 
 def verify_hash(hash):
