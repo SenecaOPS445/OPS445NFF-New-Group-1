@@ -6,9 +6,10 @@ import os
 import argparse
 import subprocess
 
-def create_backup(target, destination, compression, hash, note):
+def create_backup(target: str, destination: str, compression: int, hash: bool, note: str):
     """
     Responsible: Jonathan Hopkins
+    Refactored: Michael Popov
     Function: Creates backup of target file or directory using the tar and gzip.
     Also handles extra steps of creating hash, adding note, and naming the directory as directed by user input
     """
@@ -18,16 +19,16 @@ def create_backup(target, destination, compression, hash, note):
     if destination is None:
         destination = os.path.dirname(target)
 
-    if not os.access(target,os.F_OK):
-        print("Error: Target directory does not exist")
+    if path_exists(target) == False:
+        print("Error: Target file/directory does not exist")
         return
-    
-    if not os.access(target,os.R_OK):
-        print("Error: Cannot back up specified file/directory")
+
+    if read_access(target) == False:
+        print("Error: Cannot read target file/directory")
         return
-    
-    if not os.access(destination,os.W_OK):
-        print("Error: Cannot back up to specified directory")
+
+    if write_access(destination) == False:
+        print("Error: Cannot write to destination directory")
         return
     
     if target[-1:] == "/": #Strips trailing / if passed in as part of target
@@ -55,7 +56,7 @@ def create_backup(target, destination, compression, hash, note):
 
     return
 
-def create_backup_directory(targ,dest):
+def create_backup_directory(targ: str,dest: str):
     """
     Responsible: Jonathan Hopkins
     Function:Checkes destination directory for folders of the same name that already exsist, iterates through them to find a valid backup directory name
@@ -66,54 +67,16 @@ def create_backup_directory(targ,dest):
 
     while os.path.exists(f"{dest}/{copy_num}-{dir_name}"): #loop for checking if a backup folder of the same already exists
         copy_num += 1
-
-    dir_name = f"{copy_num}-{dir_name}" # creates the folder name with the format #-target
     
-    dest = f"{dest}/{dir_name}/" #assemble full file path for the mkdir command
+    dest = f"{dest}/{copy_num}-{dir_name}/" #assemble full file path for the mkdir command
     
     return dest #return the final directory path to be used by the tar command
 
-def strip_leading_path(path):
-    """
-    Responsible: Jonathan Hopkins
-    Function: Returns string following final / in the path
-    """
-    return path.split("/")[len(path.split("/"))-1]
 
-def cwd(targ):
+def restore_backup(target: str, destination: str):#, compression, hash, note, directory_name):
     """
-    Responsible: Jonathan Hopkins
-    Function: Create the cwd property for the TAR process so it does not archive the entire filepath.
-    """
-    while targ[-1:] != "/": #strips characters off the end that aren't a / leaving the path to the parent directory of the target
-        targ = targ[:-1]
-
-    return targ
-
-def tar_or_gz(zip):
-    """
-    Responsible: Jonathan Hopkins
-    Function: Return file extension of .tar or .tar.gz depending on compression level
-    """
-    if zip == 0:
-        return ".tar"
-    else:
-        return ".tar.gz"
-
-
-def add_note(note, dest):
-    """
-    Responsible: Rojina Bhandari
-    Function: Adds a note to the backup folder
-    """
-    note_path = os.path.join(dest,"note.txt")
-    with open(note_path,"w") as note_file:
-        note_file.write(note)
-    print (f"Note added to {note_path}")
-
-def restore_backup(target, destination=None):#, compression, hash, note, directory_name):
-    """
-    Responsible: Michael Popov, Jonathan Hopkins
+    Responsible: Michael Popov
+    Refactored: Jonathan Hopkins
     Function: Restores a target .tar.gz file to destination
     """ 
 
@@ -127,7 +90,7 @@ def restore_backup(target, destination=None):#, compression, hash, note, directo
 
     restore_name = strip_tar_gz(restore_name) # strips occurences of .tar.gz
 
-    restore_dir = f"{restore_name}_restored" # path where restore of backup will be placed
+    restore_dir = f"{destination}/{restore_name}_restored" # path where restore of backup will be placed
 
     if not os.access(target,os.F_OK):
         print("Error: Target file does not exist")
@@ -155,18 +118,18 @@ def restore_backup(target, destination=None):#, compression, hash, note, directo
             print(backup_process.stdout)
         
         if tmp_input in ["n","new"]:
-            x = restore_name
             restore_name = input("Enter a new directory name: ")
+            restore_dir = f"{destination}/{restore_name}_restored"
+            while os.access(restore_dir, os.F_OK):
+                restore_name = input("Directory already exists, enter a different directory name: ")
+                restore_dir = f"{destination}/{restore_name}_restored"
 
-            while restore_name == x:
-                restore_name = input("Directory name can not be the same as original: ")
-
-            subprocess.run(["mkdir", "-p", restore_name]) # Create directory for restoration
-            subprocess.run(["tar", "-xzvf", target, "-C", restore_name]) # Extract backup to directory
-            print(f"Restored backup to {restore_name}")            
+            restore_dir = f"{destination}/{restore_name}_restored" # path where restore of backup will be placed
+            subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
+            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
             return
         
-        if tmp_input in ["x", "exit"]:
+        if tmp_input == "exit":
             print("Exiting...")
             exit()
     
@@ -184,23 +147,24 @@ def restore_backup(target, destination=None):#, compression, hash, note, directo
         if verify_input in ["y","yes"]:
             if verify_hash(f"{cwd(target)}{hash_list[0]}") == False:
                 cont = input("File integrity is compromised. Would you like to continue with the restore regardless [y/n]:")
-                cont = cont.lower()
+                cont = verify_input.lower()
             
                 while cont not in ["y","n","no","yes"]:
                     cont = input("Please enter valid input [y/n]:")
-                    cont = cont.lower()
+                    cont = verify_input.lower()
                 
                 if cont in ["n","no"]:
-                    print("Exiting...")
                     exit()
+                
+
             
     subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
 
     subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
-
+    
     print(f"Restored backup to {restore_dir}")
 
-def verify_hash(hash):
+def verify_hash(hash: str):
     """
     Responsible: Roye Chin
     Refactored: Jonathan Hopkins
@@ -243,7 +207,7 @@ def verify_hash(hash):
     """
 
 
-def check_for_hash(targ):
+def check_for_hash(targ: str):
     """
     Responsible: Jonathan Hopkins
     Function: checks target directory for all files ending with .sha and returns a list of the file names
@@ -257,18 +221,7 @@ def check_for_hash(targ):
             sha_files.append(each)
     return sha_files
 
-def strip_tar_gz(targ):
-    """
-    Responsible: Jonathan Hopkins
-    Function: strips .tar and .gz from the end of a target file. 
-    """
-    if targ[-3:] == ".gz":
-        targ = targ [:-3]
-    if targ[-4:] == ".tar":
-        targ = targ [:-4]
-    return targ
-
-def create_hash(file_to_hash, working_dir):
+def create_hash(file_to_hash: str, working_dir: str):
     """
     Responsible: Roye Chin
     Refactored: Jonathan Hopkins
@@ -301,11 +254,195 @@ def create_hash(file_to_hash, working_dir):
     """
 
 
+
+def add_note(note: str, dest: str):
+    """
+    Responsible: Rojina Bhandari
+    Function: Adds a note to the backup folder
+    """
+    note_path = os.path.join(dest,"note.txt")
+    with open(note_path,"w") as note_file:
+        note_file.write(note)
+    print (f"Note added to {note_path}")
+
+
+def strip_leading_path(path: str) -> str:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Returns string following final / in the path
+    """
+    return path.split("/")[len(path.split("/"))-1]
+
+def cwd(targ: str) -> str:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Create the cwd property for the TAR process so it does not archive the entire filepath.
+    """
+    while targ[-1:] != "/": #strips characters off the end that aren't a / leaving the path to the parent directory of the target
+        targ = targ[:-1]
+
+    return targ
+
+def strip_tar_gz(targ: str):
+    """
+    Responsible: Jonathan Hopkins
+    Function: strips .tar and .gz from the end of a target file. 
+    """
+    if targ[-3:] == ".gz":
+        targ = targ [:-3]
+    if targ[-4:] == ".tar":
+        targ = targ [:-4]
+    return targ
+
+def tar_or_gz(zip: int) -> str:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Return file extension of .tar or .tar.gz depending on compression level
+    """
+    if zip == 0:
+        return ".tar"
+    else:
+        return ".tar.gz"
+
+
+def path_exists(path: str) -> bool:
+    if not os.access(path,os.F_OK):
+        return False
+    else:
+        return True
+
+def write_access(path: str) -> bool:
+    if not os.access(path,os.W_OK):
+        return False
+    else:
+        return True
+
+def read_access(path: str) -> bool:
+    if not os.access(path,os.R_OK):
+        return False
+    else:
+        return True
+
 def interactive_menu():
     '''
-    Responsible: Shiksha Sharma
-    Function: Create an interavtive menu to guide the user through the backup process if not agruments are provided
+    Responsible: Shikshya Sharma
+    Function: Create an interavtive menu to guide the user through the backup process if agruments are not provided
     '''
+
+    print("\nBackup Utility Menu")
+    print("-------------------")
+    print("1. Backup")
+    print("2. Restore")
+    print("3. Verify")
+    print("4. Exit")
+
+    
+    inter_menu = input("Enter your choice (1–4): ")
+    while inter_menu not in ["1","2","3","4"]:
+        inter_menu = input("Error: Invalid selection (1–4): ")
+
+
+    if inter_menu == "1":
+        print("\n--- Backup Setup ---")
+        
+        target = input("Enter the path to file/directory that you to back up: ")
+        if target[0:1] == "~":
+            target = os.path.expanduser(target)
+        while path_exists(target) == False or read_access(target) == False:
+            target = input("Invalid path. Please enter a valid file or directory path: ")
+
+        destination = input("Destination directory for the backup: ")
+        if destination[0:1] == "~":
+            destination = os.path.expanduser(destination)
+        while path_exists(destination) == False or write_access(destination) == False:
+            destination = input("Invalid directory. Please enter an existing directory: ")
+
+        opt_hash = False
+        opt_zip = 6
+        opt_note = False
+        menu_controller = [0,0,0]
+
+        while menu_controller[2] == 0:
+            menu_controller = [0,0,0]
+            print("\nAdditional Options:")
+            print("-------------------")
+            print(f"1. Create Hash: {str(opt_hash)}")
+            print(f"2. Compression Level: {opt_zip}")
+            print(f"3. Add note: {str(opt_note)}")
+            print("4. Proceed")
+
+            menu_controller = backup_opt_menu()
+            if menu_controller[0] == 1:
+                opt_hash = not opt_hash
+            if menu_controller[0] == 2:
+                opt_zip = menu_controller[1]
+            if menu_controller[0] == 3:
+                opt_note = menu_controller[1]
+            if menu_controller[0] == 4:
+                menu_controller[2] = 1
+        
+        create_backup(target,destination,opt_zip,opt_hash,opt_note)
+
+    if inter_menu == "2":
+        print("\n--- Restore Setup ---")
+
+        target = input("Enter the path to backup you want to restore from: ").strip()
+        if target[0:1] == "~":
+            target = os.path.expanduser(target)
+        while path_exists(target) == False or read_access(target) == False:
+            target = input("Invalid path. Please enter a valid file path: ").strip()
+
+        destination = input("Enter the directory you want to restore the backup to: ").strip()
+        if destination[0:1] == "~":
+            destination = os.path.expanduser(destination)
+        while path_exists(destination) == False or write_access(destination) == False:
+            destination = input("Invalid directory. Please enter an existing directory: ").strip()
+
+        restore_backup(target,destination)
+    
+    if inter_menu == "3":
+        print("\n--- Verification Setup ---")
+
+        target = input("Enter the path to backup file you want to verify: ").strip()
+        if target[0:1] == "~":
+            target = os.path.expanduser(target)
+        while path_exists(target) == False or read_access(target) == False:
+            target = input("Invalid path. Please enter a valid file path: ").strip()
+        
+        verify_hash(target)
+
+    if inter_menu == "4":
+        return
+
+
+
+def backup_opt_menu() -> list:
+    opt_menu = input("Select additional options, or proceed with backup: ")
+
+    while opt_menu not in ["1","2","3","4"]:
+        opt_menu == input("Error: Invalid selection (1–4): ")
+    
+    if opt_menu == "1":
+        return [1,0,0]
+    
+    if opt_menu == "2":
+        hash = input("Please input desire level of compression (0-9): ")
+        while hash not in ["0","1","2","3","4","5","6","7","8","9"]:
+            hash = input("Error: Invalid selection (0-9): ")
+        return [2,hash,0]
+    if opt_menu == "3":
+        note = input("Enter the note you would like to add to the backup:\n")
+        if note:
+            return [3,note,0]
+        else:
+            return [3,False,0]
+    if opt_menu == "4":
+        return [0,0,4]
+
+    
+
+    
+
 
 
 
@@ -331,7 +468,7 @@ def main():
     args = parser.parse_args()
 
     if not args.target:
-        print("Create an interactive menu")
+        interactive_menu()
         return
     
     if args.backup:
