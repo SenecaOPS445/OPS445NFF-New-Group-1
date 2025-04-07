@@ -13,9 +13,10 @@ def create_backup(target: str, destination: str, compression: int, hash: bool, n
     Function: Creates backup of target file or directory using the tar and gzip.
     Also handles extra steps of creating hash, adding note, and naming the directory as directed by user input
     """
-
+    # Takes absolute path of target and stores it
     target = os.path.abspath(target)
 
+    # If destination is not provided, use parent directory of target
     if destination is None:
         destination = os.path.dirname(target)
 
@@ -31,7 +32,7 @@ def create_backup(target: str, destination: str, compression: int, hash: bool, n
         print("Error: Cannot write to destination directory")
         return
     
-    if target[-1:] == "/": #Strips trailing / if passed in as part of target
+    if target[-1:] == "/": # Strips trailing / if passed in as part of target
         target = target[:-1]
 
     working_dir = cwd(target)
@@ -40,21 +41,24 @@ def create_backup(target: str, destination: str, compression: int, hash: bool, n
 
     destination = create_backup_directory(target,destination)
 
-    backup_dir = subprocess.run(["mkdir", destination]) #makes the directory
+    backup_dir = subprocess.run(["mkdir", destination]) # Makes the directory
 
+    # Adds note if user specified note
     if note:
         add_note(note,destination)
 
-    final_dest = f"{destination}/{target_obj}{tar_or_gz(compression)}"
+    final_dest = f"{destination}{target_obj}{tar_or_gz(compression)}"
 
-    backup_process = subprocess.run(["tar", "-czvf", final_dest, target_obj], env={"GZIP":f"-{compression}", **dict(subprocess.os.environ)}, cwd=working_dir)
-
-    print(backup_process.stdout)
+    backup_process = subprocess.run(["tar", "-czvf", final_dest, target_obj], env={"GZIP":f"-{compression}", **dict(subprocess.os.environ)}, cwd=working_dir, capture_output=True)
     
+    print(f"Created backup at {final_dest}")
+
+    # Adds hash if user wants hash
     if hash:
         create_hash(f"{target_obj}{tar_or_gz(compression)}",destination)
 
     return
+
 
 def create_backup_directory(targ: str,dest: str):
     """
@@ -65,12 +69,12 @@ def create_backup_directory(targ: str,dest: str):
 
     copy_num = 0
 
-    while os.path.exists(f"{dest}/{copy_num}-{dir_name}"): #loop for checking if a backup folder of the same already exists
+    while os.path.exists(f"{dest}/{copy_num}-{dir_name}"): # Loop for checking if a backup folder of the same already exists
         copy_num += 1
     
-    dest = f"{dest}/{copy_num}-{dir_name}/" #assemble full file path for the mkdir command
+    dest = f"{dest}/{copy_num}-{dir_name}/" # Assemble full file path for the mkdir command
     
-    return dest #return the final directory path to be used by the tar command
+    return dest # Return the final directory path to be used by the tar command
 
 
 def restore_backup(target: str, destination: str):#, compression, hash, note, directory_name):
@@ -79,18 +83,19 @@ def restore_backup(target: str, destination: str):#, compression, hash, note, di
     Refactored: Jonathan Hopkins
     Function: Restores a target .tar.gz file to destination
     """ 
-
+    # If no destination is provided, use parent directory
     if destination is None:
         destination = os.path.dirname(target)
 
+    # If destination does start with "/", use current directory
     if "/" not in target[0]:
         target = os.path.abspath(target)
 
     restore_name = strip_leading_path(target) 
 
-    restore_name = strip_tar_gz(restore_name) # strips occurences of .tar.gz
+    restore_name = strip_tar_gz(restore_name)
 
-    restore_dir = f"{destination}/{restore_name}_restored" # path where restore of backup will be placed
+    restore_dir = f"{destination}/{restore_name}_restored" # Path where restore of backup will be placed
 
     if not os.access(target,os.F_OK):
         print("Error: Target file does not exist")
@@ -104,6 +109,7 @@ def restore_backup(target: str, destination: str):#, compression, hash, note, di
         print("Error: Cannot restore to destination directory")
         return
 
+    # Check if already backup was already restored. If yes, give user options. 
     if os.access(restore_dir, os.F_OK):
         print("The file/dir you are trying to restore already exists in the destination directory.")
         tmp_input = input("Would you like to overwrite the existing file, create a new file, or exit? [(o)verwrite/(n)ew/e(x)it]:")
@@ -114,19 +120,22 @@ def restore_backup(target: str, destination: str):#, compression, hash, note, di
             tmp_input = tmp_input.lower()
 
         if tmp_input in ["o","overwrite"]:
-            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=restore_dir)
-            print(backup_process.stdout)
+            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=restore_dir, capture_output=True)
+            print(f"Overwrote restored backup at {restore_dir}")
+            return
         
         if tmp_input in ["n","new"]:
             restore_name = input("Enter a new directory name: ")
             restore_dir = f"{destination}/{restore_name}_restored"
+
             while os.access(restore_dir, os.F_OK):
                 restore_name = input("Directory already exists, enter a different directory name: ")
                 restore_dir = f"{destination}/{restore_name}_restored"
 
-            restore_dir = f"{destination}/{restore_name}_restored" # path where restore of backup will be placed
+            restore_dir = f"{destination}/{restore_name}_restored" # Path where restore of backup will be placed
             subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
-            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir], capture_output=True) # Extract backup to directory
+            print(f"Restore backup to {restore_dir}")
             return
         
         if tmp_input == "exit":
@@ -135,6 +144,7 @@ def restore_backup(target: str, destination: str):#, compression, hash, note, di
     
     hash_list = check_for_hash(target)
 
+    # Check if hash file is present and ask user if they want to check file integrity
     if len(hash_list) > 0:
         print(f"Hash file {hash_list[0]} is present with backup file.")
         verify_input = input("Would you like to verify file integrity? [y/n]:")
@@ -156,13 +166,12 @@ def restore_backup(target: str, destination: str):#, compression, hash, note, di
                 if cont in ["n","no"]:
                     exit()
                 
-
-            
     subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
 
-    subprocess.run(["tar", "-xzvf", target, "-C", restore_dir]) # Extract backup to directory
+    subprocess.run(["tar", "-xzvf", target, "-C", restore_dir], capture_output=True) # Extract backup to directory
     
     print(f"Restored backup to {restore_dir}")
+
 
 def verify_hash(hash: str):
     """
@@ -179,40 +188,12 @@ def verify_hash(hash: str):
         return True
 
 
-    """
-    hash_file = backup_file + ".hash"
-
-    if not os.path.isfile(backup_file):
-        print("Error: Backup file does not exist.")
-        return
-
-    if not os.path.isfile(hash_file):
-        print("Error: Hash file does not exist.")
-        return
-
-    # Read stored hash
-    with open(hash_file, "r") as f:
-        stored_hash = f.read().strip()
-
-    # Compute current hash
-    with open(backup_file, "rb") as f:
-        file_data = f.read()
-        current_hash = hashlib.sha256(file_data).hexdigest()
-
-    # Compare hashes
-    if current_hash == stored_hash:
-        print(" Hash matches. Backup is valid.")
-    else:
-        print(" Hash mismatch. Backup may be corrupted.")
-    """
-
-
 def check_for_hash(targ: str):
     """
     Responsible: Jonathan Hopkins
     Function: checks target directory for all files ending with .sha and returns a list of the file names
     """
-    targ = cwd(targ) #use cwd to strip file name from path
+    targ = cwd(targ) # Use cwd to strip file name from path
     cmd_output = subprocess.run(["ls", targ], capture_output=True, text=True)
     files = cmd_output.stdout.splitlines()
     sha_files = []
@@ -221,13 +202,13 @@ def check_for_hash(targ: str):
             sha_files.append(each)
     return sha_files
 
+
 def create_hash(file_to_hash: str, working_dir: str):
     """
     Responsible: Roye Chin
     Refactored: Jonathan Hopkins
     Function: 
     """
-
     hash = subprocess.run(["sha256sum", file_to_hash], cwd=working_dir, capture_output=True, text=True)
     
     hash = f"{hash.stdout.split()[0]}  {hash.stdout.split()[1]}"
@@ -242,17 +223,7 @@ def create_hash(file_to_hash: str, working_dir: str):
 
     f.close()
 
-    """
-    hash = hashlib.sha256()
-    with open(target, "rb") as file: # rb = read binary
-        while hash.update(file.read(4096)):
-            pass 
-    hash_file_path = os.path.join(destination, os.path.basename(target) + ".sha256")
-    with open(hash_file_path, "w") as hash_file:
-        hash_file.write(hash.hexdigest())
-    print("Hash file created at", hash)
-    """
-
+    print(f"Hash added to {working_dir}")
 
 
 def add_note(note: str, dest: str):
@@ -273,15 +244,17 @@ def strip_leading_path(path: str) -> str:
     """
     return path.split("/")[len(path.split("/"))-1]
 
+
 def cwd(targ: str) -> str:
     """
     Responsible: Jonathan Hopkins
     Function: Create the cwd property for the TAR process so it does not archive the entire filepath.
     """
-    while targ[-1:] != "/": #strips characters off the end that aren't a / leaving the path to the parent directory of the target
+    while targ[-1:] != "/": # Strips characters off the end that aren't a / leaving the path to the parent directory of the target
         targ = targ[:-1]
 
     return targ
+
 
 def strip_tar_gz(targ: str):
     """
@@ -293,6 +266,7 @@ def strip_tar_gz(targ: str):
     if targ[-4:] == ".tar":
         targ = targ [:-4]
     return targ
+
 
 def tar_or_gz(zip: int) -> str:
     """
@@ -311,11 +285,13 @@ def path_exists(path: str) -> bool:
     else:
         return True
 
+
 def write_access(path: str) -> bool:
     if not os.access(path,os.W_OK):
         return False
     else:
         return True
+
 
 def read_access(path: str) -> bool:
     if not os.access(path,os.R_OK):
@@ -323,12 +299,12 @@ def read_access(path: str) -> bool:
     else:
         return True
 
+
 def interactive_menu():
     '''
     Responsible: Shikshya Sharma
     Function: Create an interavtive menu to guide the user through the backup process if agruments are not provided
     '''
-
     print("\nBackup Utility Menu")
     print("-------------------")
     print("1. Backup")
@@ -336,11 +312,9 @@ def interactive_menu():
     print("3. Verify")
     print("4. Exit")
 
-    
     inter_menu = input("Enter your choice (1–4): ")
     while inter_menu not in ["1","2","3","4"]:
         inter_menu = input("Error: Invalid selection (1–4): ")
-
 
     if inter_menu == "1":
         print("\n--- Backup Setup ---")
@@ -415,7 +389,6 @@ def interactive_menu():
         return
 
 
-
 def backup_opt_menu() -> list:
     opt_menu = input("Select additional options, or proceed with backup: ")
 
@@ -439,31 +412,21 @@ def backup_opt_menu() -> list:
     if opt_menu == "4":
         return [0,0,4]
 
-    
-
-    
-
-
-
 
 def main():
     """
     Responsible: Jonathan Hopkins
     Function: Parses the arguments provided to assignment2.py
     """
-
     parser = argparse.ArgumentParser(description="A utility to create or restore backups locally")
     parser.add_argument("target", nargs="?", help="specify the /path/to/target")
     parser.add_argument("destination", nargs="?", help="specify the /path/to/destionation")
     parser.add_argument("-b", "--backup", help="create a backup", action="store_true")
     parser.add_argument("-r", "--restore", help="restore from backup", action="store_true")
     parser.add_argument("-v", "--verify", help="verify backup integrity", action="store_true")
-    #parser.add_argument("-d", "--dir", help="name the directory the backup will be stored in")
-    #didn't make the cut
     parser.add_argument("--hash", help="create a hash of the backup", action="store_true")
     parser.add_argument("-n", "--note", help="add to the note file")
     parser.add_argument("-z", "--zip", type=int, choices=range(0, 10), help="Compression level (0-9)", default = 6)
-    
 
     args = parser.parse_args()
 
@@ -483,6 +446,7 @@ def main():
     else:
         ("specify a valid action")
         return
-    
+
+
 if __name__ == "__main__":
     main()
