@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#seneca id: jshopkins
+#seneca id: jshopkins, mpopov, rbhandari17
 
 import sys
 import os
@@ -56,7 +56,6 @@ def create_backup(target: str, destination: str, compression: int, hash: bool, n
     # Adds hash if user wants hash
     if hash:
         create_hash(f"{target_obj}{tar_or_gz(compression)}",destination)
-
     return
 
 
@@ -97,75 +96,72 @@ def restore_backup(target: str, destination: str):#, compression, hash, note, di
 
     restore_dir = f"{destination}/{restore_name}_restored" # Path where restore of backup will be placed
 
-    if not os.access(target,os.F_OK):
+    if path_exists(target) == False:
         print("Error: Target file does not exist")
         return
     
-    if not os.access(target,os.R_OK):
-        print("Error: Cannot restore target backup")
+    if read_access(target) == False:
+        print("Error: Cannot read backup target")
         return
     
-    if not os.access(destination,os.W_OK):
-        print("Error: Cannot restore to destination directory")
+    if write_access(destination) == False:
+        print("Error: Cannot write to restore destination")
         return
-
-    # Check if already backup was already restored. If yes, give user options. 
-    if os.access(restore_dir, os.F_OK):
-        print("The file/dir you are trying to restore already exists in the destination directory.")
-        tmp_input = input("Would you like to overwrite the existing file, create a new file, or exit? [(o)verwrite/(n)ew/e(x)it]:")
-        tmp_input = tmp_input.lower()
-
-        while tmp_input not in ["o","n","x","overwrite","new","exit"]:
-            tmp_input = input("Invalid input. Please enter either \"(o)verwrite\", \"(n)ew\", or \"(e)xit\".")
-            tmp_input = tmp_input.lower()
-
-        if tmp_input in ["o","overwrite"]:
-            backup_process = subprocess.run(["tar", "-xzvf", target], cwd=restore_dir, capture_output=True)
-            print(f"Overwrote restored backup at {restore_dir}")
-            return
-        
-        if tmp_input in ["n","new"]:
-            restore_name = input("Enter a new directory name: ")
-            restore_dir = f"{destination}/{restore_name}_restored"
-
-            while os.access(restore_dir, os.F_OK):
-                restore_name = input("Directory already exists, enter a different directory name: ")
-                restore_dir = f"{destination}/{restore_name}_restored"
-
-            restore_dir = f"{destination}/{restore_name}_restored" # Path where restore of backup will be placed
-            subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
-            subprocess.run(["tar", "-xzvf", target, "-C", restore_dir], capture_output=True) # Extract backup to directory
-            print(f"Restore backup to {restore_dir}")
-            return
-        
-        if tmp_input == "exit":
-            print("Exiting...")
-            exit()
     
+    # Check if hash file is present and ask user if they want to check file integrity.
+    # If multiple .sha256 files are present, default to the first one found.
+
     hash_list = check_for_hash(target)
 
-    # Check if hash file is present and ask user if they want to check file integrity
     if len(hash_list) > 0:
         print(f"Hash file {hash_list[0]} is present with backup file.")
         verify_input = input("Would you like to verify file integrity? [y/n]:")
         verify_input = verify_input.lower()
 
-        while verify_input not in ["y","n","no","yes"]:
+        while verify_input not in ["y","n","no","yes","ye"]: #input verification loop
             verify_input = input("Please enter valid input [y/n]:")
             verify_input = verify_input.lower()
 
-        if verify_input in ["y","yes"]:
-            if verify_hash(f"{cwd(target)}{hash_list[0]}") == False:
+        if verify_input in ["y","yes"]: #verify the input if prompted, else skip to restore
+            if verify_hash(f"{cwd(target)}{hash_list[0]}") == False: # if verification fails, prompt user if they want to continue with restore
                 cont = input("File integrity is compromised. Would you like to continue with the restore regardless [y/n]:")
                 cont = verify_input.lower()
             
-                while cont not in ["y","n","no","yes"]:
+                while cont not in ["y","n","no","yes","ye"]: #input verification loop
                     cont = input("Please enter valid input [y/n]:")
                     cont = verify_input.lower()
                 
                 if cont in ["n","no"]:
                     exit()
-                
+
+    # Check if already backup was already restored. If yes, give user options. 
+    if path_exists(restore_dir):
+        print("The file/dir you are trying to restore already exists in the destination directory.")
+        tmp_input = input("Would you like to overwrite the existing file, create a new file, or exit? [(o)verwrite/(n)ew/e(x)it]:")
+        tmp_input = tmp_input.lower()
+
+        while tmp_input not in ["o","n","x","overwrite","new","exit"]: #input verification loop
+            tmp_input = input("Invalid input. Please enter either \"(o)verwrite\", \"(n)ew\", or \"(e)xit\".")
+            tmp_input = tmp_input.lower()
+
+        if tmp_input in ["o","overwrite"]: #overwrite existing file
+            pass
+        
+        if tmp_input in ["n","new"]: #prompts user to choose a new directory name as to not overwrite file
+            restore_name = input("Enter a new directory name (not the full file path): ")
+            restore_dir = f"{destination}/{restore_name}_restored"
+
+            while path_exists(restore_dir):
+                restore_name = input("Directory already exists, enter a different directory name: ")
+                restore_dir = f"{destination}/{restore_name}_restored"
+
+            restore_dir = f"{destination}/{restore_name}_restored" # Path where restore of backup will be placed
+        
+        if tmp_input == "exit":
+            print("Exiting...")
+            exit()
+    
+
     subprocess.run(["mkdir", "-p", restore_dir]) # Create directory for restoration
 
     subprocess.run(["tar", "-xzvf", target, "-C", restore_dir], capture_output=True) # Extract backup to directory
@@ -271,7 +267,7 @@ def strip_tar_gz(targ: str):
 def tar_or_gz(zip: int) -> str:
     """
     Responsible: Jonathan Hopkins
-    Function: Return file extension of .tar or .tar.gz depending on compression level
+    Function: Return file extension string of .tar or .tar.gz depending on compression level
     """
     if zip == 0:
         return ".tar"
@@ -280,6 +276,10 @@ def tar_or_gz(zip: int) -> str:
 
 
 def path_exists(path: str) -> bool:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Checks if file path exists
+    """
     if not os.access(path,os.F_OK):
         return False
     else:
@@ -287,6 +287,10 @@ def path_exists(path: str) -> bool:
 
 
 def write_access(path: str) -> bool:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Checks write access for given path    
+    """
     if not os.access(path,os.W_OK):
         return False
     else:
@@ -294,6 +298,10 @@ def write_access(path: str) -> bool:
 
 
 def read_access(path: str) -> bool:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Checks read access for given path    
+    """
     if not os.access(path,os.R_OK):
         return False
     else:
@@ -303,6 +311,7 @@ def read_access(path: str) -> bool:
 def interactive_menu():
     '''
     Responsible: Shikshya Sharma
+    Refactored: Jonathan Hopkins
     Function: Create an interavtive menu to guide the user through the backup process if agruments are not provided
     '''
     print("\nBackup Utility Menu")
@@ -390,6 +399,10 @@ def interactive_menu():
 
 
 def backup_opt_menu() -> list:
+    """
+    Responsible: Jonathan Hopkins
+    Function: Handles setting optional backup parameters in the interactive menu
+    """
     opt_menu = input("Select additional options, or proceed with backup: ")
 
     while opt_menu not in ["1","2","3","4"]:
